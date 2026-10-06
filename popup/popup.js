@@ -40,7 +40,9 @@ function renderStatus(res) {
     setEnabled(false);
     return;
   }
-  el.textContent = res.found ? (res.title || '已就绪') : '未检测到视频，请先进入播放页';
+  el.textContent =
+    (res.found ? (res.title || '已就绪') : '未检测到视频，请先进入播放页') +
+    (res.mode ? `（${res.mode}）` : '');
   setEnabled(!!res.found);
   updateRecBtn(res.recording);
 }

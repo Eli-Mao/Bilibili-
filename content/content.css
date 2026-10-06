@@ -1,5 +1,88 @@
 /* BiliCut 内容脚本样式 */
 
+/* ===== 原生控制条内按钮 ===== */
+
+/* 组容器透明化，让按钮成为控制条的直接 flex 子项 */
+.bcut-ctrl-group { display: contents; }
+
+.bcut-ctrl-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 40px;
+  flex: none;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.9;
+}
+
+.bcut-ctrl-btn:hover { opacity: 1; }
+
+.bcut-ctrl-btn .bcut-ic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 40px;
+  transition: transform 0.12s ease;
+}
+
+.bcut-ctrl-btn svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.bcut-ctrl-btn:hover .bcut-ic { transform: scale(1.12); }
+
+/* 录制状态：图标切换 + 变红 */
+.bcut-ic-stop { display: none; }
+.bcut-rec-on .bcut-ic-rec { display: none; }
+.bcut-rec-on .bcut-ic-stop { display: block; }
+.bcut-ctrl-btn.bcut-rec-on { color: #ff5c7a; }
+
+/* ===== 录制角标（控制条隐藏时也可见） ===== */
+
+.bcut-recbadge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2147483646;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(20, 20, 28, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #ff5c7a;
+  font-size: 12px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+.bcut-recbadge.bcut-on { display: flex; }
+
+.bcut-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4d6a;
+  animation: bcut-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes bcut-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* ===== 回退悬浮工具条（控制条结构不匹配时使用） ===== */
+
 .bcut-bar {
   position: absolute;
   top: 12px;
@@ -46,10 +129,6 @@
 .bcut-btn.bcut-rec-on { color: #ff5c7a; }
 .bcut-btn.bcut-rec-on:hover { background: rgba(255, 92, 122, 0.18); }
 
-.bcut-ic-stop { display: none; }
-.bcut-rec-on .bcut-ic-rec { display: none; }
-.bcut-rec-on .bcut-ic-stop { display: block; }
-
 .bcut-timer {
   display: none;
   color: #ff5c7a;
@@ -61,6 +140,8 @@
 }
 
 .bcut-active .bcut-timer { display: inline; }
+
+/* ===== 提示浮层 ===== */
 
 .bcut-toast {
   position: fixed;

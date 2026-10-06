@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BiliCut - B站看番截图截段助手",
-  "version": "1.0.0",
+  "version": "1.1.5",
   "description": "像手机端B站一样：一键截取视频当前画面、录制视频片段（含声音），并复制带时间点的分享链接，看番分享更方便。",
   "permissions": ["storage", "tabs"],
   "background": {
