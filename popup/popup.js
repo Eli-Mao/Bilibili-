@@ -4,14 +4,14 @@ let opts = { ...DEFAULTS };
 
 const $ = (s) => document.querySelector(s);
 
-function isBiliUrl(url) {
-  return /^https?:\/\/([a-z0-9-]+\.)*bilibili\.com\//i.test(url || '');
+function isWebUrl(url) {
+  return /^https?:\/\//i.test(url || '');
 }
 
 async function send(msg) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !isBiliUrl(tab.url)) return { error: 'notOnBili' };
+    if (!tab || !isWebUrl(tab.url)) return { error: 'notWebPage' };
     return await chrome.tabs.sendMessage(tab.id, msg);
   } catch (e) {
     return { error: 'noContent' };
@@ -30,8 +30,8 @@ function updateRecBtn(rec) {
 
 function renderStatus(res) {
   const el = $('#status');
-  if (!res || res.error === 'notOnBili') {
-    el.textContent = '请在 B 站视频页面使用';
+  if (!res || res.error === 'notWebPage') {
+    el.textContent = '请在含视频的网页中使用';
     setEnabled(false);
     return;
   }
@@ -41,7 +41,7 @@ function renderStatus(res) {
     return;
   }
   el.textContent =
-    (res.found ? (res.title || '已就绪') : '未检测到视频，请先进入播放页') +
+    (res.found ? (res.title || '已就绪') : '未检测到视频，请打开含视频的网页') +
     (res.mode ? `（${res.mode}）` : '');
   setEnabled(!!res.found);
   updateRecBtn(res.recording);

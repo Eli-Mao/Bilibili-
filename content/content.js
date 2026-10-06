@@ -5,7 +5,7 @@
   if (window.__BILICUT_LOADED__) return;
   window.__BILICUT_LOADED__ = true;
 
-  const VERSION = '1.1.5';
+  const VERSION = '1.3.0';
   console.log(`%c[BiliCut] v${VERSION} 已加载`, 'color:#fb7299;font-weight:bold');
 
   const DEFAULTS = { autoCopy: true, includeAudio: true, format: 'png' };
@@ -25,6 +25,7 @@
     audioDest: null,
     stream: null,
     canvas: null,
+    tabTitle: undefined,
   };
 
   chrome.storage.sync.get({ bilicut_options: DEFAULTS }, (r) => {
@@ -75,14 +76,18 @@
     return generic || getHost(video);
   }
 
-  // 最近的定位祖先（悬浮条/角标的挂载点）
+  // 最近的定位祖先（悬浮条/角标的挂载点）。全屏时必须待在全屏元素内部，
+  // 否则元素不会渲染
   function getHost(video) {
+    const fsEl = document.fullscreenElement;
+    const fs = fsEl && fsEl !== document.body && fsEl.contains(video) ? fsEl : null;
     let el = video.parentElement;
-    for (let i = 0; el && i < 10; i++) {
+    for (let i = 0; el && i < 12; i++) {
       if (el instanceof HTMLElement && getComputedStyle(el).position !== 'static') return el;
+      if (el === fs) return el;
       el = el.parentElement;
     }
-    return document.body;
+    return fs || document.body;
   }
 
   function findControlsRight(video) {
@@ -105,11 +110,14 @@
   }
 
   function videoTitle() {
-    let t = (document.title || '').trim();
-    const idx = t.search(/[-_—]\s*(哔哩哔哩|bilibili)/i);
+    // 在 iframe（播放器框架）内时，框架自身标题通常为空，改用宿主页面的标签页标题
+    const inFrame = window.top !== window.self;
+    let t = ((inFrame && S.tabTitle) ? S.tabTitle : (document.title || '')).trim();
+    // 去掉常见视频站点的标题后缀
+    const idx = t.search(/[-_—|]\s*(哔哩哔哩|bilibili|YouTube|腾讯视频|爱奇艺|优酷|芒果TV)\s*$/i);
     if (idx > 0) t = t.slice(0, idx);
-    t = t.replace(/[\\/:*?"<>|]/g, ' ').trim();
-    return (t || 'bilibili').slice(0, 60);
+    t = t.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+    return (t || 'video').slice(0, 60);
   }
 
   function nowStamp() {
@@ -141,6 +149,7 @@
   }
 
   function saveBlob(blob, name) {
+    console.log('[BiliCut] saveBlob', name, blob.size, blob.type);
     const a = document.createElement('a');
     const url = URL.createObjectURL(blob);
     a.href = url;
@@ -150,6 +159,65 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
+
+  // 沙箱 iframe（如苹果CMS的解析播放器框架）内浏览器会拦截下载与剪贴板，
+  // 统一改由顶层框架代为执行；顶层不可用（无响应）时返回 null，调用方再本地兜底
+  let saveSeq = 0;
+  const pendingSave = new Map();
+
+  function requestTopSave(blob, name, wantCopy) {
+    return new Promise((resolve) => {
+      if (window.top === window.self) { resolve(null); return; }
+      const id = 'bc' + (++saveSeq) + '_' + Date.now();
+      const timer = setTimeout(() => {
+        pendingSave.delete(id);
+        console.warn('[BiliCut] 顶层页面未响应保存请求，改用本框架保存');
+        resolve(null);
+      }, 2500);
+      pendingSave.set(id, (res) => { clearTimeout(timer); resolve(res); });
+      try {
+        window.top.postMessage({ type: 'bcut-save-blob', id, name, blob, copy: !!wantCopy }, '*');
+      } catch (e) {
+        clearTimeout(timer);
+        pendingSave.delete(id);
+        resolve(null);
+      }
+    });
+  }
+
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (!d || typeof d !== 'object') return;
+    // 顶层框架：代 iframe 保存 / 复制
+    if (d.type === 'bcut-save-blob') {
+      if (window.top !== window.self || !(d.blob instanceof Blob)) return;
+      (async () => {
+        let saved = false;
+        let copied = false;
+        try {
+          saveBlob(d.blob, d.name || 'video');
+          saved = true;
+        } catch (err) {
+          console.warn('[BiliCut] 顶层保存失败', err);
+        }
+        if (d.copy) copied = await copyImage(d.blob);
+        if (e.source) e.source.postMessage({ type: 'bcut-save-result', id: d.id, saved, copied }, '*');
+      })();
+      return;
+    }
+    // iframe：接收顶层执行结果
+    if (d.type === 'bcut-save-result' && d.id) {
+      const done = pendingSave.get(d.id);
+      if (done) { pendingSave.delete(d.id); done({ saved: !!d.saved, copied: !!d.copied }); }
+      return;
+    }
+    // 顶层框架：iframe 请求启动/结束录屏兜底（沙箱框架内不让发起录屏）
+    if (d.type === 'bcut-sr-toggle') {
+      if (window.top !== window.self) return;
+      if (SR.recorder) stopScreenRecord();
+      else showSrBar();
+    }
+  });
 
   function toPngBlob(blob) {
     return new Promise((res, rej) => {
@@ -197,10 +265,71 @@
   }
 
   // ---------- 功能：截图 ----------
+  // 在 iframe 内时，从顶层框架的 iframe 列表里找出承载自己的那个（用于坐标换算）
+  function pickFrameRect(frames, href) {
+    if (!frames || !frames.length) return null;
+    const big = frames.filter((f) => f.w * f.h > 40000);
+    if (!big.length) return null;
+    const key = (s) => {
+      try { const u = new URL(s); return u.host + u.pathname; } catch (e) { return s || ''; }
+    };
+    const mine = key(href);
+    const exact = big.find((f) => f.src && key(f.src) === mine);
+    if (exact) return exact;
+    let host = '';
+    try { host = new URL(href).host; } catch (e) { /* 忽略 */ }
+    const sameHost = big.find((f) => { try { return new URL(f.src).host === host; } catch (e) { return false; } });
+    if (sameHost) return sameHost;
+    return big.sort((a, b) => b.w * b.h - a.w * a.h)[0]; // 兜底：取最大的框架（播放器通常最大）
+  }
+
+  // 跨域视频的画布读不到像素，退而截取整个可见标签页，再按播放器位置裁剪
+  async function captureTabFallback(video) {
+    try {
+      const r = video.getBoundingClientRect();
+      if (r.width < 40 || r.height < 40) return null;
+      const resp = await chrome.runtime.sendMessage({ type: 'bcut-capture-tab' });
+      if (!resp || !resp.dataUrl) {
+        console.warn('[BiliCut] 标签页截屏失败:', resp && resp.error);
+        return null;
+      }
+      const img = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = rej;
+        i.src = resp.dataUrl;
+      });
+      // 坐标换算：截图为设备像素；在 iframe 内还要加上框架在顶层页面中的偏移
+      let offX = 0;
+      let offY = 0;
+      let refWidth = window.innerWidth;
+      if (resp.frameInfo) {
+        refWidth = resp.frameInfo.innerWidth || refWidth;
+        const fr = pickFrameRect(resp.frameInfo.frames, location.href);
+        if (fr) { offX = fr.x; offY = fr.y; }
+      }
+      const scale = img.width / Math.max(1, refWidth);
+      const sx = Math.max(0, (offX + r.left) * scale);
+      const sy = Math.max(0, (offY + r.top) * scale);
+      const sw = Math.min(r.width * scale, img.width - sx);
+      const sh = Math.min(r.height * scale, img.height - sy);
+      if (sw < 40 || sh < 40) return null;
+      const c = document.createElement('canvas');
+      c.width = Math.round(sw);
+      c.height = Math.round(sh);
+      c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      return await new Promise((res) => c.toBlob(res, 'image/png'));
+    } catch (e) {
+      console.warn('[BiliCut] 标签页截屏异常:', e);
+      return null;
+    }
+  }
+
   async function screenshot() {
     const video = getVideo();
     if (!video || !video.videoWidth) { toast('未找到可截图的视频'); return; }
     let blob = null;
+    let viaTab = false;
     try {
       const c = document.createElement('canvas');
       c.width = video.videoWidth;
@@ -211,15 +340,17 @@
       const isJpg = options.format === 'jpg';
       blob = await new Promise((r) => c.toBlob(r, isJpg ? 'image/jpeg' : 'image/png', 0.95));
     } catch (e) {
-      toast('截图失败：该视频画面受版权保护，无法访问');
-      return;
+      console.warn('[BiliCut] 画布直取失败，改用标签页截屏', e);
+      viaTab = true;
+      blob = await captureTabFallback(video);
     }
-    if (!blob) { toast('截图失败，请重试'); return; }
-    const ext = options.format === 'jpg' ? 'jpg' : 'png';
-    saveBlob(blob, `${videoTitle()}_${nowStamp()}.${ext}`);
-    let copied = false;
-    if (options.autoCopy) copied = await copyImage(blob);
-    toast(copied ? '已保存并复制到剪贴板，可直接粘贴给朋友' : '截图已保存');
+    if (!blob) { toast('截图失败：该视频画面受保护且标签页截屏不可用'); return; }
+    const ext = viaTab ? 'png' : (options.format === 'jpg' ? 'jpg' : 'png');
+    const res = await saveWithRelay(blob, `${videoTitle()}_${nowStamp()}.${ext}`, options.autoCopy);
+    if (!res.saved) { toast('保存失败：浏览器拦截了下载，请重试'); return; }
+    if (res.copied) toast('已保存并复制到剪贴板，可直接粘贴给朋友');
+    else if (viaTab) toast('已保存（该网页视频跨域受限，改用标签页截屏，可能含弹幕等叠加内容）');
+    else toast('截图已保存');
   }
 
   // ---------- 功能：复制分享链接（含当前时间点） ----------
@@ -320,7 +451,8 @@
       try {
         ctx.getImageData(0, 0, 1, 1); // 画布污染检测
       } catch (e) {
-        toast('无法截取：该视频画面受版权保护');
+        console.warn('[BiliCut] 视频跨域，画布不可读，改用录屏兜底');
+        openScreenRecordFallback();
         return false;
       }
       console.log('[BiliCut] 画布就绪', c.width + 'x' + c.height);
@@ -389,7 +521,7 @@
     updateRecUI();
   }
 
-  function onRecordStop() {
+  async function onRecordStop() {
     const type = (S.recorder && S.recorder.mimeType) || 'video/webm';
     cleanup();
     updateRecUI();
@@ -398,8 +530,157 @@
     S.chunks = [];
     if (!blob.size) { toast('没有录到内容'); return; }
     const ext = type.includes('mp4') ? 'mp4' : 'webm';
-    saveBlob(blob, `${videoTitle()}_片段_${nowStamp()}.${ext}`);
-    toast('片段已保存，可在下载列表查看');
+    const res = await saveWithRelay(blob, `${videoTitle()}_片段_${nowStamp()}.${ext}`, false);
+    toast(res.saved ? '片段已保存，可在下载列表查看' : '保存失败：浏览器拦截了下载');
+  }
+
+  // 先请顶层页面代存（沙箱 iframe 里浏览器会拦截下载），顶层不可用时本地兜底
+  async function saveWithRelay(blob, name, wantCopy) {
+    const top = await requestTopSave(blob, name, wantCopy);
+    if (top) return top;
+    try {
+      saveBlob(blob, name);
+    } catch (e) {
+      console.warn('[BiliCut] 保存失败', e);
+      return { saved: false, copied: false };
+    }
+    const copied = wantCopy ? await copyImage(blob) : false;
+    return { saved: true, copied };
+  }
+
+  // ---------- 录屏兜底：跨域视频无法从画布录制时，改为录标签页画面 ----------
+  const SR = { stream: null, recorder: null, chunks: [], startTime: 0, timer: 0 };
+
+  function srBar() {
+    return document.querySelector('.bcut-srbar');
+  }
+
+  function showSrBar() {
+    let bar = srBar();
+    if (bar) return bar;
+    bar = document.createElement('div');
+    bar.className = 'bcut-srbar';
+    bar.innerHTML = `
+      <span class="bcut-sr-text">BiliCut：该网站视频跨域，改用录屏截段（建议先全屏播放器再开始，画面更干净）</span>
+      <button class="bcut-sr-btn" data-sr="start">开始录屏</button>
+      <button class="bcut-sr-btn bcut-sr-ghost" data-sr="cancel">取消</button>`;
+    bar.addEventListener('click', (e) => {
+      const btn = e.target.closest('.bcut-sr-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.dataset.sr === 'start') startScreenRecord();
+      else if (btn.dataset.sr === 'stop') stopScreenRecord();
+      else hideSrBar();
+    });
+    (document.body || document.documentElement).appendChild(bar);
+    return bar;
+  }
+
+  function hideSrBar() {
+    const bar = srBar();
+    if (bar) bar.remove();
+  }
+
+  function srSetRecordingUI(on) {
+    const bar = srBar();
+    if (!bar) return;
+    const text = bar.querySelector('.bcut-sr-text');
+    const start = bar.querySelector('[data-sr="start"]');
+    const cancel = bar.querySelector('[data-sr="cancel"]');
+    clearInterval(SR.timer);
+    if (on) {
+      bar.classList.add('bcut-sr-on');
+      if (start) { start.dataset.sr = 'stop'; start.textContent = '停止录屏'; }
+      if (cancel) cancel.style.display = 'none';
+      SR.timer = setInterval(() => {
+        const s = Math.floor((Date.now() - SR.startTime) / 1000);
+        if (text) text.textContent = `● 录屏中 ${pad(Math.floor(s / 60))}:${pad(s % 60)}（再次点播放器的截段按钮或按 Alt+Shift+R 结束）`;
+      }, 400);
+    } else {
+      bar.classList.remove('bcut-sr-on');
+      if (start) { start.dataset.sr = 'start'; start.textContent = '开始录屏'; }
+      if (cancel) cancel.style.display = '';
+      if (text) text.textContent = 'BiliCut：该网站视频跨域，改用录屏截段（建议先全屏播放器再开始，画面更干净）';
+    }
+  }
+
+  async function startScreenRecord() {
+    if (SR.recorder) return true;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      toast('当前浏览器不支持录屏');
+      return false;
+    }
+    showSrBar();
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: true,
+        preferCurrentTab: true,
+        selfBrowserSurface: 'include',
+      });
+    } catch (e) {
+      console.warn('[BiliCut] 录屏未授权或不可用', e);
+      toast('未开始录屏（未选择共享对象或被拒绝）');
+      return false;
+    }
+    SR.stream = stream;
+    if (!stream.getAudioTracks().length) toast('提示：未勾选共享音频，片段不会有声音');
+    try {
+      SR.recorder = createRecorder(stream);
+    } catch (e) {
+      console.error('[BiliCut] 录屏初始化失败', e);
+      toast('录屏初始化失败：' + ((e && e.message) || e));
+      stream.getTracks().forEach((t) => t.stop());
+      SR.stream = null;
+      return false;
+    }
+    SR.chunks = [];
+    SR.recorder.ondataavailable = (e) => { if (e.data && e.data.size) SR.chunks.push(e.data); };
+    SR.recorder.onstop = onScreenRecordStop;
+    try { SR.recorder.start(500); } catch (e) { SR.recorder.start(); }
+    SR.startTime = Date.now();
+    srSetRecordingUI(true);
+    console.log('[BiliCut] 录屏已启动', SR.recorder.mimeType);
+    // 用户点浏览器自带的"停止共享"时同样收尾
+    stream.getVideoTracks().forEach((t) => t.addEventListener('ended', () => stopScreenRecord()));
+    return true;
+  }
+
+  function stopScreenRecord() {
+    if (!SR.recorder) return;
+    try { if (SR.recorder.state !== 'inactive') SR.recorder.stop(); } catch (e) { /* 忽略 */ }
+  }
+
+  async function onScreenRecordStop() {
+    const type = (SR.recorder && SR.recorder.mimeType) || 'video/webm';
+    if (SR.stream) {
+      SR.stream.getTracks().forEach((t) => t.stop());
+      SR.stream = null;
+    }
+    SR.recorder = null;
+    clearInterval(SR.timer);
+    SR.timer = 0;
+    const blob = new Blob(SR.chunks, { type: type.split(';')[0] });
+    SR.chunks = [];
+    srSetRecordingUI(false);
+    hideSrBar();
+    if (!blob.size) { toast('没有录到内容'); return; }
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const res = await saveWithRelay(blob, `${videoTitle()}_录屏_${nowStamp()}.${ext}`, false);
+    toast(res.saved ? '录屏片段已保存，可在下载列表查看' : '保存失败：浏览器拦截了下载');
+  }
+
+  // 画布被跨域污染：顶层页面直接弹共享框；iframe 内（沙箱框架不让录屏）请顶层协助
+  function openScreenRecordFallback() {
+    if (window.top === window.self) {
+      hideSrBar();
+      startScreenRecord();
+    } else {
+      try { window.top.postMessage({ type: 'bcut-sr-toggle' }, '*'); } catch (e) { /* 忽略 */ }
+      toast('该网站视频跨域，已请上方页面弹出录屏选项（如未看到请先按 Esc 退出全屏）');
+    }
   }
 
   function cleanup() {
@@ -417,8 +698,9 @@
   }
 
   async function toggleRecord() {
-    console.log('[BiliCut] toggleRecord 被调用, recording =', S.recording);
+    console.log('[BiliCut] toggleRecord 被调用, recording =', S.recording, 'screenRecord =', !!SR.recorder);
     try {
+      if (SR.recorder) { stopScreenRecord(); return; }
       if (S.recording) { stopRecording(false); toast('正在生成片段文件…'); return; }
       const ok = await startRecording();
       if (ok) toast('开始截取，再次点击或按 Alt+Shift+R 结束');
@@ -625,6 +907,15 @@
       sendResponse({ found: !!(v && v.videoWidth), recording: S.recording, title: v ? videoTitle() : '', mode: uiMode });
       return;
     }
+    if (msg.type === 'bcut-frame-info') {
+      // 顶层框架：回报本页所有 iframe 的位置，供子框架换算截屏坐标
+      const frames = Array.from(document.querySelectorAll('iframe')).map((f) => {
+        const r = f.getBoundingClientRect();
+        return { src: f.src || '', x: r.left, y: r.top, w: r.width, h: r.height };
+      });
+      sendResponse({ frames, innerWidth: window.innerWidth });
+      return;
+    }
     if (msg.type === 'bcut-command') {
       runAction(msg.action).finally(() => sendResponse({ ok: true, recording: S.recording }));
       return true; // 异步响应
@@ -632,15 +923,27 @@
   });
 
   // ---------- 初始化 ----------
-  let moQueued = false;
+  let moTimer = 0;
   const mo = new MutationObserver(() => {
-    if (moQueued) return;
-    moQueued = true;
-    requestAnimationFrame(() => { moQueued = false; ensureUI(); });
+    clearTimeout(moTimer);
+    moTimer = setTimeout(ensureUI, 250); // 防抖：避免在大型站点上每帧执行
   });
+
+  function onFsChange() {
+    clearTimeout(moTimer);
+    moTimer = setTimeout(ensureUI, 120); // 全屏切换后重新挂载（全屏元素内才可见）
+  }
 
   function start() {
     mo.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    if (window.top !== window.self) {
+      // iframe 内：预取宿主页面标题，用于生成文件名
+      chrome.runtime.sendMessage({ type: 'bcut-tab-title' })
+        .then((r) => { if (r && r.title) S.tabTitle = r.title; })
+        .catch(() => {});
+    }
     ensureUI();
     setInterval(ensureUI, 2000); // 兜底：SPA 切换剧集/播放器重建后重新挂载
   }

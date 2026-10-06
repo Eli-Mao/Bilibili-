@@ -97,15 +97,13 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.18s ease, visibility 0.18s;
+  opacity: 0.3; /* 常驻显示但保持低调，鼠标移上去变清晰 */
+  transition: opacity 0.18s ease;
 }
 
-.bcut-host:hover .bcut-bar,
+.bcut-bar:hover,
 .bcut-bar.bcut-active {
   opacity: 1;
-  visibility: visible;
 }
 
 .bcut-btn {
@@ -170,3 +168,50 @@
   opacity: 1;
   visibility: visible;
 }
+
+/* ===== 录屏兜底控制条（跨域视频无法从画布录制时，在顶层页面显示） ===== */
+
+.bcut-srbar {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 92vw;
+  padding: 8px 10px 8px 16px;
+  border-radius: 12px;
+  background: rgba(20, 20, 28, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  color: #f2f3f7;
+  font-size: 13px;
+  font-family: 'Segoe UI', system-ui, 'Microsoft YaHei', sans-serif;
+}
+
+.bcut-srbar.bcut-sr-on { border: 1px solid #ff5c7a; }
+
+.bcut-sr-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bcut-srbar.bcut-sr-on .bcut-sr-text { color: #ff5c7a; }
+
+.bcut-sr-btn {
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #fb7299;
+  color: #fff;
+}
+
+.bcut-sr-btn:hover { filter: brightness(1.12); }
+.bcut-sr-ghost { background: rgba(255, 255, 255, 0.16); }
