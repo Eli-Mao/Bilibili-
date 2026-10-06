@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>BiliCut</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>BiliCut <span>看番助手</span></h1>
+    <p id="status">检测中…</p>
+  </header>
+  <main>
+    <button id="btn-shot" class="act">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span>截图当前画面</span>
+    </button>
+    <button id="btn-rec" class="act">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+      <span>开始截取片段</span>
+    </button>
+    <button id="btn-link" class="act">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <span>复制分享链接（含时间点）</span>
+    </button>
+
+    <section class="opts">
+      <label class="row">
+        <span>截图后自动复制</span>
+        <input type="checkbox" id="opt-copy">
+      </label>
+      <label class="row">
+        <span>片段包含声音</span>
+        <input type="checkbox" id="opt-audio">
+      </label>
+      <div class="row">
+        <span>截图格式</span>
+        <div class="seg">
+          <button data-f="png">PNG</button>
+          <button data-f="jpg">JPG</button>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      快捷键：<b>Alt+Shift+S</b> 截图 · <b>Alt+Shift+R</b> 截段<br>
+      图片/片段会自动下载，在浏览器下载列表中查看；截图可直接粘贴到聊天窗口发给朋友
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

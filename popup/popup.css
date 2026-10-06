@@ -1,0 +1,106 @@
+:root {
+  --pink: #fb7299;
+  --bg: #14161c;
+  --card: #1d2027;
+  --text: #f2f3f7;
+  --sub: #9aa0ad;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, 'Microsoft YaHei', sans-serif;
+}
+
+header { padding: 16px 18px 10px; }
+
+h1 { font-size: 16px; }
+h1 span { color: var(--pink); }
+
+#status {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+main {
+  padding: 6px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button.act {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #fff;
+  background: #2a2e38;
+  transition: filter 0.15s, transform 0.05s;
+}
+button.act:hover { filter: brightness(1.15); }
+button.act:active { transform: scale(0.985); }
+button.act:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+button.act svg { width: 16px; height: 16px; flex: none; }
+
+#btn-shot { background: linear-gradient(135deg, #fb7299, #ff5c7a); }
+#btn-rec.on { background: linear-gradient(135deg, #ff5c7a, #c0392b); }
+
+.opts {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 4px 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+.row + .row { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--pink);
+  cursor: pointer;
+}
+
+.seg {
+  display: flex;
+  background: #14161c;
+  border-radius: 8px;
+  padding: 2px;
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  color: var(--sub);
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.seg button.on { background: var(--pink); color: #fff; }
+
+footer {
+  font-size: 11px;
+  color: var(--sub);
+  line-height: 1.7;
+}
+footer b { color: #c6cbd6; font-weight: 600; }

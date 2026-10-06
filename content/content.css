@@ -1,0 +1,91 @@
+/* BiliCut 内容脚本样式 */
+
+.bcut-bar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(20, 20, 28, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s;
+}
+
+.bcut-host:hover .bcut-bar,
+.bcut-bar.bcut-active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.bcut-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+}
+
+.bcut-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.bcut-btn:active { transform: scale(0.92); }
+.bcut-btn svg { width: 17px; height: 17px; display: block; }
+
+.bcut-btn.bcut-rec-on { color: #ff5c7a; }
+.bcut-btn.bcut-rec-on:hover { background: rgba(255, 92, 122, 0.18); }
+
+.bcut-ic-stop { display: none; }
+.bcut-rec-on .bcut-ic-rec { display: none; }
+.bcut-rec-on .bcut-ic-stop { display: block; }
+
+.bcut-timer {
+  display: none;
+  color: #ff5c7a;
+  font-size: 12px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  padding: 0 6px 0 8px;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+
+.bcut-active .bcut-timer { display: inline; }
+
+.bcut-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  background: rgba(20, 20, 28, 0.85);
+  color: #fff;
+  font-size: 13px;
+  font-family: 'Segoe UI', system-ui, 'Microsoft YaHei', sans-serif;
+  padding: 8px 16px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.22s, visibility 0.22s;
+  pointer-events: none;
+  max-width: 70vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bcut-toast.bcut-show {
+  opacity: 1;
+  visibility: visible;
+}
